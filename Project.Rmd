@@ -1,0 +1,102 @@
+---
+fontsize: 10pt
+geometry: margin=0.5in
+output:
+  html_document: default
+  fig_width: 2
+  fig_height: 1.5
+  pdf_document: null
+---
+Practical Machine Learning Project
+=========================
+By Bin Jia
+
+## Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, The goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict their behaviors.
+
+
+## Exploratory Analysis
+
+Firstly, let's obtain the data from urls.
+
+```{r}
+train_url <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+test_url <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+setInternet2(use = TRUE)
+download.file(train_url,"train_data.csv")
+download.file(test_url,"test_data.csv")
+```
+Next, let's set vrious missing data indicators (such as '#DIV/0!') to NA.
+```{r}
+train_data <- read.csv("train_data.csv", na.strings=c("NA","#DIV/0!",""))
+test_data <- read.csv("test_data.csv", na.strings=c("NA","#DIV/0!",""))
+```
+Next, let's remove the column with NA and first 7 columnus (not necessary for predicting).
+```{r}
+train_data <- train_data[, colSums(is.na(train_data)) == 0] 
+test_data <- test_data[, colSums(is.na(test_data)) == 0] 
+train_data <- train_data[,-(1:7)]
+test_data <- test_data[,-(1:7)]
+str(train_data)
+```
+
+## Fiting a predict model
+
+Firstly, let's prepare the data for analysis (cross validation)
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+seperation_index <-  createDataPartition(train_data$classe, p=0.70, list=F)
+trainset <- train_data[seperation_index, ]
+evaluateset  <- train_data[-seperation_index, ]
+```
+
+Next, let's define the parameter for the traning model, i.e., using 10-fold cross validation.
+
+```{r}
+options <- trainControl(method="cv", 10)
+predictmodel<- train(classe ~ ., data=trainset, method="rf",
+                 trControl=options)
+```
+
+Next, let's see the model and check the model accuracy. It can be seen that the accuracy is 0.99.
+```{r}
+predictmodel
+evaluation_val <- predict(predictmodel, evaluateset)
+confusionMatrix(evaluateset$classe, evaluation_val)
+```
+
+## Prediction using the model
+
+Now we are ready to predict the result using the model and the test data set.
+
+```{r}
+predict_result <- predict(predictmodel, test_data[, -length(names(test_data))])
+predict_result
+```
+
+## Visualization of the model
+Let's see the decision tree we used. 
+```{r}
+treeModel <- rpart(classe ~ ., data=trainset, method="class")
+fancyRpartPlot(treeModel) 
+```
+
+## Preparing the submission
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predict_result)
+```
